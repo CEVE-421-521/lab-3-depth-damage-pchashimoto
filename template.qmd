@@ -121,30 +121,16 @@ function get_depth_damage_function(
     return damage_fn # <4>
 end
 ```
+
 ```{julia}
 damage_fn = get_depth_damage_function(ocean_star_dd.depths, ocean_star_dd.damages)
 ```
 
 
-```{julia}
-p = let
-    depths = uconvert.(u"ft", (-10.0u"ft"):(1.0u"inch"):(30.0u"ft")) # <1>
-    damages = damage_fn.(depths) # <2>
-    scatter(
-        depths,
-        damages;
-        xlabel="Flood Depth",
-        ylabel="Damage (%)",
-        label="$(ocean_star_dd.description) ($(ocean_star_dd.source))",
-        legend=:bottomright,
-        size=(800, 400),
-        linewidth=2,
-    )
-end
-p
-```
-
 # Expected annual damages
+
+The following plot shows the generalized extreme value distribution that we are assuming captures flood risk at the Galveston Pier 21 Water Gauge and at the Ocean Star Museum Gift Shop. 
+
 ```{julia}
 gauge_dist = GeneralizedExtremeValue(5, 1.5, 0.1)
 p1 = plot(
@@ -157,35 +143,24 @@ p1 = plot(
 )
 
 offset = 3.31 # house is 2.5 feet above gauge
-house_dist = GeneralizedExtremeValue(gauge_dist.μ - offset, gauge_dist.σ, gauge_dist.ξ)
+building_dist = GeneralizedExtremeValue(gauge_dist.μ - offset, gauge_dist.σ, gauge_dist.ξ)
 
-plot!(p1, house_dist; label="Gift Shop Distribution", linewidth=2)
+plot!(p1, building_dist; label="Gift Shop Distribution", linewidth=2)
 ```
 
+I next draw 1,000,000 samples from the generalized extreme value distribution and calculate the sample mean.
 
 ```{julia}
+#| output: false 
 Random.seed!(123)
-samp = 1u"km".* rand(gauge_dist, 100)
-
+samp = 1u"km".* rand(building_dist, 1000000)
 ```
 
 ```{julia}
 dmg_fn(samp) = itp(ustrip.(u"ft", samp)) # <1>
-dmg_fn.(samp) # <2>
-
-p = let
-    depths = samp # <1>
-    damages = dmg_fn.(depths) # <2>
-    scatter(
-        depths,
-        damages;
-        xlabel="Flood Depth",
-        ylabel="Damage (%)",
-        label="$(ocean_star_dd.description) ($(ocean_star_dd.source))",
-        legend=:bottomright,
-        size=(800, 400),
-        linewidth=2,
-    )
-end
+year_vec = dmg_fn.(samp) # <2>
+mc_est = mean(year_vec)
 ```
 # Discussion
+
+The estimate of annual damages based on 1,000,000 random samples from a generalized extreme value distribution with a mean of 5ft, a standard deviation of 1.5 ft, and  error 0.1ft is `{julia} mc_est` percent. This means that if we assume that flooding at the Galveston Pier 1 Water Gauge follows this distribution, the HAZUS depth damage curve predicts that, on average, the Ocean Star Museum Gift Shop will experience flood damage to `{julia} mc_est` percent of its content, meaning its inventory in the case of a gift shop.
