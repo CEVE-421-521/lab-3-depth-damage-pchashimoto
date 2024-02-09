@@ -1,7 +1,7 @@
 ---
 title: "Lab 3: Depth-Damage Models"
 subtitle: "DataFrames and Distributions"
-author: "CEVE 421/521"
+author: "Patricia Hashimoto pch3"
 date: 2024-01-26
 week: 3
 categories: [Lab]

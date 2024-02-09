@@ -1,7 +1,7 @@
 ---
 title: "Lab 3: Depth-Damage Models"
 subtitle: "DataFrames and Distributions"
-author: "Your Name"
+author: "Patricia Hashimoto"
 date: 2024-01-26
 week: 3
 categories: [Lab]
@@ -52,14 +52,140 @@ using Interpolations
 using Plots
 using StatsPlots
 using Unitful
+using Random
 
 Plots.default(; margin=6Plots.mm)
 ```
 
 # Site information
+I selected the water gauge at 8771450 Galveston Pier 21, TX, which is located at the coordinates 29.31, -94.626667. The building I selected is the Ocean Star Museum Gift Shop, which is located at the coordinates 29.31046, -94.7917. Based on an estimate from Google Maps, the straight line distance between these points, not accounting for elevation differences, is less than 600 feet. An estimate from the USGS National Map Viewer suggests that this building is at an elevation of approximately 1.01m, or 3.31ft.
 
 # Depth-Damage
+```{julia}
+include("depthdamage.jl")
+haz_fl_dept = CSV.read("data/haz_fl_dept.csv", DataFrame)
+```
+
+Because the selected structure is a museum gift shop, we will use the HAZUS row with the description "Gift Shop, contents (Inventory)".
+
+```{julia}
+ocean_star_row = @rsubset(
+    haz_fl_dept, :Description == "Gift Shop, contents (Inventory)"
+)[
+    1, :,
+]
+ocean_star_dd = DepthDamageData(ocean_star_row)
+```
+```{julia}
+scatter(
+    ocean_star_dd.depths,
+    ocean_star_dd.damages;
+    xlabel="Flood Depth at Building",
+    ylabel="Damage (%)",
+    label="$(ocean_star_dd.description) ($(ocean_star_dd.source))",
+    legend=:bottomright,
+    size=(700, 500),
+)
+```
+
+```{julia}
+#| output: false
+itp = let # <1>
+    depth_ft = ustrip.(u"ft", ocean_star_dd.depths) # <2>
+    damage_frac = ocean_star_dd.damages
+    Interpolations.LinearInterpolation(
+        depth_ft,
+        damage_frac;
+        extrapolation_bc=Interpolations.Flat(), # <3>
+    )
+end
+```
+
+
+```{julia}
+function get_depth_damage_function(
+    depth_train::Vector{<:T}, dmg_train::Vector{<:AbstractFloat}
+) where {T<:Unitful.Length}
+
+    # interpolate
+    depth_ft = ustrip.(u"ft", depth_train)
+    interp_fn = Interpolations.LinearInterpolation(
+        depth_ft, # <1>
+        dmg_train;
+        extrapolation_bc=Interpolations.Flat(), # <2>
+    )
+
+    damage_fn = function (depth::T2) where {T2<:Unitful.Length}
+        return interp_fn(ustrip.(u"ft", depth)) # <3>
+    end
+    return damage_fn # <4>
+end
+```
+```{julia}
+damage_fn = get_depth_damage_function(ocean_star_dd.depths, ocean_star_dd.damages)
+```
+
+
+```{julia}
+p = let
+    depths = uconvert.(u"ft", (-10.0u"ft"):(1.0u"inch"):(30.0u"ft")) # <1>
+    damages = damage_fn.(depths) # <2>
+    scatter(
+        depths,
+        damages;
+        xlabel="Flood Depth",
+        ylabel="Damage (%)",
+        label="$(ocean_star_dd.description) ($(ocean_star_dd.source))",
+        legend=:bottomright,
+        size=(800, 400),
+        linewidth=2,
+    )
+end
+p
+```
 
 # Expected annual damages
+```{julia}
+gauge_dist = GeneralizedExtremeValue(5, 1.5, 0.1)
+p1 = plot(
+    gauge_dist;
+    label="Gauge Distribution",
+    xlabel="Water Level (ft)",
+    ylabel="Probability Density",
+    legend=:topright,
+    linewidth=2,
+)
 
+offset = 3.31 # house is 2.5 feet above gauge
+house_dist = GeneralizedExtremeValue(gauge_dist.μ - offset, gauge_dist.σ, gauge_dist.ξ)
+
+plot!(p1, house_dist; label="Gift Shop Distribution", linewidth=2)
+```
+
+
+```{julia}
+Random.seed!(123)
+samp = 1u"km".* rand(gauge_dist, 100)
+
+```
+
+```{julia}
+dmg_fn(samp) = itp(ustrip.(u"ft", samp)) # <1>
+dmg_fn.(samp) # <2>
+
+p = let
+    depths = samp # <1>
+    damages = dmg_fn.(depths) # <2>
+    scatter(
+        depths,
+        damages;
+        xlabel="Flood Depth",
+        ylabel="Damage (%)",
+        label="$(ocean_star_dd.description) ($(ocean_star_dd.source))",
+        legend=:bottomright,
+        size=(800, 400),
+        linewidth=2,
+    )
+end
+```
 # Discussion
