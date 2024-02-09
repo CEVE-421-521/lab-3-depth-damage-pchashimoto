@@ -66,7 +66,7 @@ include("depthdamage.jl")
 haz_fl_dept = CSV.read("data/haz_fl_dept.csv", DataFrame)
 ```
 
-Because the selected structure is a museum gift shop, we will use the HAZUS row with the description "Gift Shop, contents (Inventory)".
+Because the selected structure is a museum gift shop, we will use the HAZUS row with the description "Gift Shop, contents (Inventory)". The building appears to be one story, which is an option for buildings of this class.
 
 ```{julia}
 ocean_star_row = @rsubset(
@@ -85,6 +85,7 @@ scatter(
     label="$(ocean_star_dd.description) ($(ocean_star_dd.source))",
     legend=:bottomright,
     size=(700, 500),
+    title = "Ocean Star Museum Gift Shop HAZUS Damage"
 )
 ```
 
